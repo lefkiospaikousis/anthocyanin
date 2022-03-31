@@ -1,0 +1,190 @@
+---
+title: "Descriptives - Associations"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+```{r Setup, include=FALSE}
+
+library(haven)
+library(skimr)
+library(labelled)
+library(flextable)
+library(gtsummary)
+library(corrr)
+library(tidyverse)
+
+Sys.setlocale(locale = "Greek")
+
+dta <- readRDS("Data/anthocyans-clean.rds")
+
+source("000-helper_functions.R")
+gtsummary::set_gtsummary_theme(theme_gtsummary)
+
+labels <- var_label(dta)
+
+vars_indep <- c("humidity", "rain", "altitude", "temp_max", "temp_min", "temp_avg")
+
+vars_dep <- c("cyanidol3G", "delphinidol3G", "peonidol3G", "petunidol3G", "malvidol3G")
+
+vars_weather <- c("Humidity" = "humidity", 
+                  "Rain" = "rain",
+                  "Temperature" = "temp_avg")
+
+set_flextable_defaults(
+  table.layout = "autofit",
+  na_str = "-"
+)
+
+
+```
+
+
+Σκοπός αυτής της ανάλυσης είναι να μελετήσουμε τις σχέσεις μεταξύ των ανεξάρτητων μεταβλητών για την MANOVA ανάλυση.    
+
+- Ποικιλία: `r unique(dta$variety) %>% paste(collapse = ", ")`
+- Μεταβλητές καιρού: `r names(vars_weather) %>% paste(collapse = ", ")`
+- Περιοχή: `r unique(dta$region) %>% paste(collapse = ", ")`
+- Έτος: `r unique(dta$year) %>% paste(collapse = ", ")`
+
+
+Πιθανή συσχέτιση 2 ή περισσότερων μεταβλητών σημαίνει ότι θα έχουμε το φαινόμενο της __πολυσυγγραμικότητας__ και θα έχουμε λάθος επιδράσεις στο μοντέλο. Άρα αυτό που θέλουμε είναι να __μην__ υπάρχουν συσχετίσεις μεταξύ των μεταβλητών αυτών.   
+
+
+
+### `Ποικιλία` ανά `Έτος`
+
+Δεν υπάρχει σχέση ποικιλίας και έτους (P=0.99)
+
+```{r}
+
+dta %>% tbl_cross(variety, year) %>% 
+  add_p() %>% 
+  modify_header(label = " ") %>% 
+  as_flex_table() %>% 
+  set_caption("Variety by year")
+```
+
+### `Ποικιλία` ανά `Περιοχή`    
+
+Δεν πάρθηκαν ποικιλίες από όλες τις περιοχές. Π.χ. Μαραθεύτικο δεν πήραμε από Βάσα και Μαλλιά.
+
+```{r}
+dta %>% tbl_cross(variety, region) %>% 
+  #add_p() %>% 
+  modify_header(label = " ") %>% 
+  as_flex_table() %>% 
+  set_caption("Variety by Region")
+
+```
+
+
+### `Έτος` ανά `Περιοχή`    
+
+Σε κάθε χρονιά πήραμε από όλες τις περιοχές. Δεν υπάρχει συσχετιση χρονιάς στην περιοχή συλλογής (P=0.99)
+
+```{r}
+dta %>% tbl_cross(year, region) %>% 
+  add_p() %>% 
+  modify_header(label = " ") %>% 
+  as_flex_table() %>% 
+  set_caption("Year by Region")
+
+```
+
+
+### Υψόμετρο και περιοχή
+
+Εδώ έχουμε το υψόμετρο της κάθε περιοχής.   
+Βλέπουμε ότι έχουμε 2 υψόμετρα στα Μαλλιά (647, 393)
+
+Γενικά όμως ισχύει ότι το υψόμετρο είναι συνιφασμένο με την περιοχή. Οπότε στο μοντέλο είτε υψόμετρο θα βάλω είτε την περιοχή. Όχι και τα δύο    
+
+
+```{r}
+
+dta %>% 
+  count(region, altitude, name = "samples") %>% 
+  arrange(-altitude) %>% 
+  flextable() %>% 
+  set_caption("Region and altitude")
+
+```
+
+
+
+### Σχέση `Περιοχής` με μεταβλητές καιρού    
+
+Οι μεταβλητές του καιρού (Θερμοκρασία, Βροχόπτωση, Υγρασία) διαφοροποιούνται αναλόγως της περιοχής. Yυπάρχει συσχέτιση 
+
+
+```{r}
+dta %>% 
+  filter(variety == "Mavro") %>% 
+  filter(region != "MALLIA") %>% 
+  select(altitude, all_of(vars_weather)) %>% 
+  tbl_summary(
+    by = altitude,
+    type = list(everything() ~ "continuous")
+  ) %>% 
+  add_p() %>% 
+  as_flex_table() %>% 
+  set_caption("Επίδραση Περιοχής στο καιρό")
+
+
+```
+
+
+### Σχέση `Έτους` με μεταβλητές καιρού    
+
+Οι μεταβλητές του καιρού (Θερμοκρασία, Βροχόπτωση, Υγρασία) διαφοροποιούνται αναλόγως του έτους.    
+
+Συγκεκριμένα, κάθε χρόνο φαίνεται να αυξάνεται η υγρασία και η βροχή
+
+Θα πρέπει το έτος και οι μεταβλητές καιρού να μπουν σε ξεχωριστά μοντέλα.
+
+```{r}
+dta %>% 
+  select(year, all_of(vars_weather)) %>% 
+  tbl_summary(
+    by = year,
+    type = list(everything() ~ "continuous")
+  ) %>% 
+  add_p() %>% 
+  as_flex_table() %>% 
+  set_caption("Επίδραση Έτους στο καιρό")
+
+```
+
+### Συσχέτιση μεταβλητών καιρού
+    
+    
+
+```{r}
+
+dta %>% 
+  select(vars_weather) %>% 
+  correlate() %>% 
+  shave()
+
+
+
+res_fa <- psych::fa(
+  dta %>% select(vars_weather) , 1
+)
+
+
+res_fa %>% names()
+
+fa_scores <- as.numeric(res_fa$scores)
+
+
+
+```
+
+
