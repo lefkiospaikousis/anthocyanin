@@ -48,7 +48,7 @@ fa_scores <- as.numeric(res_fa$scores)
 
 dta$weather <- fa_scores
 
-var_label(dta$weather) <- "Weather Conditions"
+var_label(dta$weather) <- "Overall Weather Condition (FA score)"
 
 saveRDS(dta, "Data/anthocyans-clean.rds")
 haven::write_sav(dta, "Data/anthocyans-clean.sav")
