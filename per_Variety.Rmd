@@ -1,0 +1,647 @@
+---
+output:
+  word_document: default
+  html_document: default
+  
+params:
+  variety: 
+    label: "Variety:"
+    value: Mavro
+    input: select
+    choices: [OFTHALMO,  Cabernet Sauvignon, Maratheftiko, Mavro]
+
+title: |
+  "`r paste0('Variety: ', params$variety)`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+
+flextable::set_flextable_defaults(
+  font.size = 8,
+  theme_fun = "theme_vanilla",
+  na_str = ""
+)
+
+```
+
+```{r Setup, include=FALSE}
+
+library(haven)
+library(skimr)
+library(labelled)
+library(flextable)
+library(gtsummary)
+library(corrr)
+library(glue)
+library(ggforce)
+library(tidyverse)
+
+Sys.setlocale(locale = "Greek")
+
+dta_full <- readRDS("Data/anthocyans-clean.rds")
+
+source("000-helper_functions.R")
+gtsummary::set_gtsummary_theme(theme_gtsummary)
+
+labels <- var_label(dta_full)
+
+vars_indep <- c("humidity", "rain", "altitude", "temp_max", "temp_min", "temp_avg")
+
+vars_dep <- c("cyanidol3G", "delphinidol3G", "peonidol3G", "petunidol3G", "malvidol3G")
+
+vars_weather <- c("Humidity" = "humidity", "Rain" = "rain", "Temperature" = "temp_avg")
+
+set_flextable_defaults(
+  table.layout = "autofit",
+  na_str = "-"
+)
+
+dta <- dta_full[dta_full$variety == params$variety,]
+
+```
+
+
+Για την ποικιλία `r params$variety` έχουμε συνολικά `r nrow(dta)` παρατηρήσεις    
+
+
+### Δείγματα ανά `Έτος`,  `Υψόμετρο`, `Περιοχή`  
+
+Πάρθηκαν 2 δείγματα από κάθε υψόμετρο σε κάθε έτος.    
+
+```{r}
+
+# dta %>%
+#   tbl_cross(year, altitude) %>%
+#   add_p() %>%
+#   modify_header(label = " ") %>%
+#   as_flex_table() %>%
+#   set_caption(paste0("Έτος και Υψόμετρο - Variety: ", params$variety))
+
+dta %>% 
+  count(region, year, altitude, name = "samples") %>% 
+  flextable() %>% 
+  set_caption(paste0("Έτος, Περιοχή και Υψόμετρο - Ποικιλία: ", params$variety)) %>% 
+  merge_v(j = 1)
+
+```
+
+### `Έτος` και `Καιρός`
+
+```{r, results='asis'}
+
+if(params$variety == "Maratheftiko"){
+  
+  glue::glue(
+    "
+    - To 2013 είχαμε χαμηλότερη υγρασία σε σχέση με το 2014 και 2015
+    - Η βροχόπτωση έχει μια ανοδική πορεία κάθε χρόνο 
+    
+    "
+  )
+  
+}
+
+if(params$variety == "OFTHALMO"){
+  
+  glue::glue(
+    "
+    - Η βροχόπτωση έχει μια ανοδική πορεία κάθε χρόνο 
+    
+    "
+  )
+  
+}
+
+if(params$variety == "Cabernet Sauvignon"){
+  
+  glue::glue(
+    "
+    Στα δείγματα που πήραμε, δεν υπάρχει διασπορά στην Υγρασία και Θερμοκρασία μέσα σε κάθε έτος (SD=0)
+    Δεν μπορούν να εξαχθούν αξιόπιστα συμπεράσματα
+    
+    - Η βροχόπτωση έχει μια ανοδική πορεία κάθε χρόνο 
+    "
+  )
+}
+
+if(params$variety == "Mavro"){
+  
+  glue::glue(
+    "
+    - Η Υγρασία έχει μια ανοδική πορεία κάθε χρόνο 
+    - Η βροχόπτωση έχει μια ανοδική πορεία κάθε χρόνο 
+    - H θερμοκρασία δεν μεταβάλλεται πολύ κάθε χρόνο
+    "
+  )
+}
+
+
+```
+
+
+```{r}
+
+dta %>% 
+  select(all_of(vars_weather), year) %>% 
+  tbl_summary(by = year,
+              type = list(everything() ~ "continuous"),
+              digits = list(all_stat_cols() ~ c(2,1))
+  ) %>% 
+  add_p() %>% 
+  modify_header(statistic ~ "**F**", label = "") %>% 
+  modify_fmt_fun(statistic ~ function(x) style_number(x, digits = 3)) %>% 
+  as_flex_table() %>% 
+  set_caption("Μεταβλητές καιρού ανά έτος")
+
+```
+
+
+### `Υψόμετρο` και `Καιρός`  
+
+```{r, results='asis'}
+
+if(params$variety == "Maratheftiko"){
+  
+  glue::glue(
+    "
+    - Στα 837 μέτρα έχουμε χαμηλότερη υγρασία
+    - Στα 832 μέτρα έχουμε μεγαλύτερη βροχώπτωση
+    - Δεν υπάρχουν μεγάλες διαφορές στη θερμοκρασία
+    
+    "
+  )
+  
+}
+
+if(params$variety == "OFTHALMO"){
+  
+  glue::glue(
+    "
+    - Στα 793 μέτρα έχουμε υψηλότερη Υγρασία και Βροχόπτωση
+    - Στα 647 μέτρα έχουμε υψηλότερη θερμοκρασία
+    "
+  )
+}
+
+if(params$variety == "Cabernet Sauvignon"){
+  
+  glue::glue(
+    "
+   Δεν υπάρχει συσχέτιση υψομέτρου και μεταβλητών καιρού
+    "
+  )
+}
+
+if(params$variety == "Mavro"){
+  
+  glue::glue(
+    "
+    - Στα 393 μέτρα έχουμε χαμηλότερη Υγρασία και Βροχόπτωση
+    - H θερμοκρασία δεν μεταβάλλεται πολύ σε από υψόμετρο σε υψόμετρο
+    "
+  )
+}
+
+
+```
+
+```{r}
+tar_var <- "altitude" 
+
+n_alt <- length(unique(dta[[tar_var]]))
+statistic <- ifelse(n_alt > 2, "**F**", "**t**")
+
+dta %>% 
+  select(all_of(vars_weather),  !!tar_var) %>% 
+  #filter(altitude>800) %>% 
+  tbl_summary(
+    by = !!tar_var,
+    type = list(everything() ~ "continuous")
+  ) %>% 
+  add_p() %>% 
+  modify_header(statistic ~ statistic, label = "") %>%
+  as_flex_table() %>% 
+  set_caption("Συσχέτιση Υψόμετρο με το καιρό")
+
+
+```
+
+
+```{r eval=FALSE, include=FALSE}
+
+dta %>% 
+  group_by(year, altitude) %>% 
+  summarise(
+    humidity = mean(humidity)
+  ) %>% 
+  spread(year, humidity)
+
+
+lm(humidity ~ year*altitude, dta) %>% 
+  tbl_regression()
+
+dta_grp <- dta %>%  group_by(year) 
+
+dta_grp %>% 
+  select(all_of(vars_weather),  !!tar_var, year) %>% 
+  group_split() %>% 
+  map(
+    ~  select(., -year) %>% 
+      tbl_summary(.,
+                  by = !!tar_var,
+                  type = list(everything() ~ "continuous")
+      ) %>% 
+      add_p() %>% 
+      modify_header(label= "")
+    
+  ) %>% 
+  tbl_stack(group_header = group_keys(dta_grp) %>% pull()) %>% 
+  as_flex_table() %>% 
+  set_caption("Συσχέτιση Υψόμετρο με το καιρό")
+
+```
+
+
+```{r eval=FALSE, include=FALSE}
+
+### Συσχέτιση μεταβλητών καιρού
+
+# Υπάρχει συσχέτιση μεταξύ Υγρασίας, Βρόπτωσης και Μέσης Θερμοκρασίας 
+
+dta %>% 
+  select(all_of(vars_weather)) %>%
+  correlate() %>%
+  shave() %>% 
+  mutate(across(where(is.numeric), round, 2)) %>% 
+  filter(term != "Humidity") %>% 
+  select(-Temperature) %>% 
+  rename(" " = term) %>% 
+  flextable() %>% 
+  set_caption("Γραμμική συσχέτιση (r) μεταξύ μεταβλητών καιρού")
+
+
+# dta %>% 
+#   select(all_of(vars_weather), weather) %>%
+#   correlate() %>% 
+#   #have() %>% 
+#   focus(weather) %>% 
+#   mutate(weather = round(weather, 2)) %>% 
+#   rename(" " = term, r = weather) %>% 
+#   flextable() %>% 
+#   set_caption("Correlation of weather factor score and actual weather characteristics")
+# 
+# 
+# dta %>% 
+#   select(all_of(vars_weather), weather) %>% 
+#   lpmisc::lp_scatter_by_target(target = weather, names(vars_weather)) +
+#   labs(x = "Factor Analysis score")+
+#   theme_bw() 
+
+
+```
+
+
+```{r eval=FALSE, include=FALSE}
+
+### Συσχέτιση επιπέδου Ανθοκυανίνων με καιρικές συνθήκες
+
+dta %>% 
+  select(all_of(unname(vars_weather)), all_of(vars_dep)) %>%
+  correlate() %>% 
+  shave() %>%
+  focus(all_of(vars_weather)) %>% 
+  filter(!term %in% vars_weather) %>% 
+  mutate(term = recode(term, !!!labels)) %>% 
+  mutate(across(where(is.numeric), round, 2)) %>% 
+  rename(" " = term) %>% 
+  flextable() %>% 
+  # flextable::add_header_lines(values = paste0("Variety: ", y)) %>% 
+  # add_header_row( values = "blah blah", colwidths = 4) %>% 
+  # add_header("Temperature" = "Weather") %>% 
+  set_caption(
+    glue::glue("Γραμμική συσχέτιση (r) Ανθοκυανίνων, με μεταβλητές καιρού-Ποικιλία: {params$variety}"),
+    html_escape = FALSE
+  ) 
+
+```
+
+### Συσχέτιση επιπέδου Ανθοκυανίνων
+
+```{r, results='asis'}
+
+if(params$variety == "Maratheftiko"){
+  
+  glue::glue(
+    "
+    - H Cyanidol συσχετίζεται θετικά με Delphinidol (r = 0.53) και Peonidol (r = 0.59)
+    - H Delphinidol συσχετίζεται θετικά με Peonidol (r = 0.56)
+    - H Peonidol συσχετίζεται αρνητικά με Petunidol (r = -0.54)
+    - H Petunidol συσχετίζεται θετικά με Malvidol (r = 0.41)
+    
+    "
+  )
+  
+}
+
+if(params$variety == "OFTHALMO"){
+  
+  glue::glue(
+    "
+    - H Cyanidol έχει χαμηλή θετική συσχέτιση με Peonodol (r = 0.27) και Malvidol (r = 0.23)
+    - H Delphinidol συσχετίζεται θετικά με Peonidol (r = 0.65)
+    - H Peonidol συσχετίζεται αρνητικά με Petunidol (r = -0.54)
+    - H Petunidol συσχετίζεται θετικά με Malvidol (r = 0.42)
+    
+    "
+  )
+  
+}
+
+if(params$variety == "Cabernet Sauvignon"){
+  
+  glue::glue(
+    "
+    - H Cyanidol έχει θετική συσχέτιση με Delphinidol (r = 0.53), Petunidol (r = 0.34) και Malvidol (r = 0.22)
+    - H Delphinidol συσχετίζεται θετικά με Peonidol (r = 0.25)
+    - H Peonidol συσχετίζεται αρνητικά με Petunidol (r = -0.65)
+    - H Petunidol συσχετίζεται θετικά με Malvidol (r = 0.31)
+    
+    "
+  )
+  
+}
+
+if(params$variety == "Mavro"){
+  
+  glue::glue(
+    "
+   - Υπάρχουν υψηλές συσχετίσεις μεταξύ όλων των ουσιών
+    "
+  )
+}
+
+```
+
+```{r echo=FALSE}
+
+dta %>% 
+  select(all_of(vars_dep)) %>%
+  correlate() %>% 
+  shave() %>%
+  filter(term != "cyanidol3G") %>% 
+  select(-malvidol3G) %>% 
+  mutate(term = recode(term, !!!labels)) %>% 
+  mutate(across(where(is.numeric), round, 2)) %>% 
+  rename_with(function(x) {
+    new_labs <- labels
+    new_labs$term <- " "
+    new_labs[x] %>% unlist() 
+  }) %>% 
+  flextable() %>% 
+  # flextable::add_header_lines(values = paste0("Variety: ", y)) %>% 
+  # add_header_row( values = "blah blah", colwidths = 4) %>% 
+  # add_header("Temperature" = "Weather") %>% 
+  set_caption(
+    glue::glue("Γραμμική συσχέτιση (r) Ανθοκυανίνων, με μεταβλητές καιρού-Ποικιλία: {params$variety}"),
+    html_escape = FALSE
+  ) 
+
+```
+
+
+```{r, fig.cap="Scatterplot for the anthokyanine associations", fig.pos="top", fig.width=10, fig.height=10}
+
+dta %>% 
+  select(all_of(vars_dep)) %>% 
+  rename_with(~labels[.] %>% unlist()) %>% 
+  ggplot(aes(x = .panel_x, y = .panel_y)) + 
+  geom_point(alpha = 0.8, shape = 16, size = 1.5) + 
+  geom_autodensity(alpha = 0.6) +
+  #geom_density2d() +
+  geom_smooth(method = "lm")+
+  facet_matrix(vars(everything()), layer.diag = 2, layer.upper = FALSE,
+               grid.y.diag = FALSE)+
+  
+  theme_bw()
+
+```
+
+```{r eval=FALSE, fig.height=10, fig.width=12, include=FALSE}
+### Scatterplot 
+lpmisc::lp_scatter_by_target(dta , target = rain, all_of(vars_dep))+
+  labs(x = "Rain", y = "")
+
+lpmisc::lp_scatter_by_target(dta, target = humidity, all_of(vars_dep))+
+  labs(x = "Humidity", y = "")
+
+lpmisc::lp_scatter_by_target(dta, target = temp_avg, all_of(vars_dep))+
+  labs(x = "Temperature (average)", y = "")
+
+lpmisc::lp_scatter_by_target(dta, target = altitude, all_of(vars_dep))+
+  labs(x = "Altitude", y = "")
+
+# plotly::ggplotly(
+#   dta %>% 
+#     ggplot(
+#       aes(altitude, petunidol3G, color = region)
+#     )+
+#     geom_point()
+# )
+```
+
+### MANOVA - Mulivariate analysis
+
+
+```{r}
+# with {car}
+
+mod <- lm(cbind(cyanidol3G, delphinidol3G, peonidol3G,
+                petunidol3G,malvidol3G) ~ humidity + rain + temp_avg + altitude + year, data = dta)
+
+if(params$variety == "Cabernet Sauvignon"){
+  
+  mod <- lm(cbind(cyanidol3G, delphinidol3G, peonidol3G,
+                  petunidol3G,malvidol3G) ~ humidity + rain + temp_avg + altitude, data = dta)
+  
+}
+
+
+res_mod <- car::Manova(mod, type = 3)
+
+# https://stackoverflow.com/a/25900151/8689932
+# create new print function
+outtests <- car:::print.Anova.mlm
+# allow the function to return the results and disable print
+body(outtests)[[16]] <- quote(invisible(tests))
+body(outtests)[[15]] <- NULL
+
+method_names <- c("Pillai", "Wilks", "Hotelling-Lawley", "Roy")
+
+# Run the Anova over all tests  
+tab <- lapply(method_names, function(i)  outtests(car::Anova(mod, type = 3,  test.statistic=i)))
+
+names(tab) <- method_names
+
+tab <- tab %>% 
+  map(~as_tibble(., rownames = "effect")) %>% 
+  map(~rename(., 
+              p.value = 'Pr(>F)',
+              num.df = "num Df",
+              den.df = "den Df",
+              'F' = "approx F",
+              df = Df,
+              Pillais = 'test stat'
+  )) 
+
+
+pillais <- tab$Pillai %>% filter(effect != "(Intercept)") 
+
+sig_effects <- pillais$effect[pillais$p.value<0.05]
+
+sig_effects <- labels[sig_effects] %>% unlist()
+
+pillais_fix <- pillais %>% 
+  mutate(p.value = ifelse(p.value < 0.001, "<0.001", round(p.value, 3)),
+         across(where(is.numeric), round, 3),
+         effect = recode(effect, !!!labels)
+  ) 
+
+
+effect_text <- pillais %>% 
+  filter(effect %in% names(sig_effects)) %>% 
+  mutate(p.value = ifelse(p.value < 0.001, "<0.001", round(p.value, 3))) %>% 
+  mutate(effect_text = glue::glue("{labels[effect]} (p:{p.value})")) %>% 
+  pull(effect_text)
+
+out <- if(length(effect_text) != 0){
+  glue::glue_collapse(effect_text, sep = ", ", last = " and ")
+} else {
+  character(0)
+}
+
+```
+
+Τα `r if(length(out) == 0) NULL else out` έχουν επίδραση στις Ανθυκυανίνες ως ομάδα μεταβλητών.   
+
+
+```{r}
+pillais_fix %>% 
+  select(effect, Pillais, 'F', p.value) %>% 
+  flextable() %>% 
+  set_caption("MANOVA-Επίδραση στην ομάδα των Ανθοκυανίνων") %>% 
+  footnote( i = 1, j = c(2),
+            value = as_paragraph(
+              c("Pillais trace statistic")
+            ),
+            ref_symbols = c("a"),
+            part = "header",inline = F) 
+
+
+```
+
+
+### Post Hoc tests - ANOVA
+
+
+```{r, results='asis'}
+
+
+cat("
+Πραγματοποιήθηκαν post-hoc ANOVA test για την διερεύνηση των ανθοκυανίνων αυτών που τυγχάνουν επίδρασης από τις μεταβλητές", glue::glue_collapse(sig_effects, sep = ', ', last = ' και '), "Η στατιστική σημαντικότητα (p value) έτυχε προσαρμογής με τη μέθοδο Holms για τον έλεγχο της πιθανότητας σφάλματος τύπου Ι λόγω των πολλαπλών συγκρίσεων.
+
+"
+)
+
+if(params$variety == "Maratheftiko"){
+  
+  glue::glue(
+    "
+  Οι μεταβλήτές αυτές έχουν επίδραση μόνο στα επίπεδα __Peonidol 3G__ και __Petunidol 3G__
+    
+- Αυξημένο υψόμετρο συσχετίζεται με __μειωμένη__ συγκέντρωση Peonidol (b = -0.191, p = .008)
+- Αυξημένο υψόμετρο συσχετίζεται με __αυξημένη__ συγκέντρωση Petunidol (b = 0.101, p < .001)
+- Αυξημένη Υγρασία συσχετίζεται με __αυξημένο__ επίπεδο Petunidol (b = 0.713, p < .001)
+
+- Τα έτη 2014 (b = 5.1, p = .034) και 2015 (b = 9.2, p < .001) συσχετίζονται με __αυξημένη__ συγκέντρωση Peonidol σε σχέση με το 2013
+- Τα έτη 2014 (b = -3.8, p = .034) και 2015 (b = -4.06, p < .001) συσχετίζονται με __μειωμένη__ συγκέντρωση Peonidol σε σχέση με το 2013
+
+    "
+  )
+  
+}
+
+if(params$variety == "OFTHALMO"){
+  glue::glue(
+    "Μετά από την προσαρμογή της στατιστικής σημαντικότητας με τη μέθοδο Holms, δεν παρατηρούνται στατιστικά σημαντικές επιδράσεις των μεταβλητών στα επίπεδα των ανθοκυανίνων"
+  )
+  
+}
+
+if(params$variety == "Cabernet Sauvignon"){
+  
+  glue::glue(
+    "
+  Οι μεταβλήτές αυτές έχουν επίδραση μόνο στα επίπεδα __Cyanidol 3G__ και __Delphinidol 3G__
+    
+- Αυξημένη Θερμοκρασία συσχετίζεται με __μειωμένη__ συγκέντρωση Cyanidol (b = -1.875, p = .003) και Delphinidol (b = -2.425, p = .038)
+    "
+  )
+  
+}
+
+if(params$variety == "Mavro"){
+  
+  glue::glue(
+    "
+  Οι μεταβλήτές αυτές έχουν επίδραση μόνο στα επίπεδα __Cyanidol 3G__ ,  __Delphinidol 3G__, __Petunidol 3G__ και __Malvidol 3G__.
+    
+- Αυξημένη Θερμοκρασία συσχετίζεται με __αυξημένη__ συγκέντρωση Cyanidol (b = 2.231, p = .029) 
+
+- Αυξημένο υψόμετρο συσχετίζεται με __αυξημένη__ συγκέντρωση Peonidol (b = 0.007, p < .001),
+Delphinidol 3G (b = 0.006, p < .001), Petunidol 3g (b = 0.009, p < .001) και Malvidol 3G (b = 0.08, p < .001)
+
+- Τo έτος 2015 (b = 9.2, p < .001) συσχετίζονται με __αυξημένη__ συγκέντρωση Cyanidol (b = 0.896, p < .001) και Malvidol (b = 12.127, p < .001) σε σχέση με το 2013
+    "
+  )
+  
+}
+
+```
+
+
+```{r}
+broom::tidy(mod) %>% 
+  select(response, term, estimate, p.value) %>% 
+  filter(term != "(Intercept)") %>% 
+  mutate(p.value = p.adjust(p.value), method = "holm") %>% 
+  select(-any_of("method")) %>% 
+  #filter(p.value < 0.05) %>% 
+  mutate(term = recode(term, !!!labels),
+         estimate = round(estimate, 3),
+         across(matches("p\\."), ~ {
+           ifelse(. < 0.001, "<0.001", round(., 3))
+         }
+         )
+  ) %>% 
+  filter(p.value<0.05) %>% 
+  mutate(response = recode(response, !!!labels)) %>%
+  rename(effect = term, 
+         b = estimate,
+         " Dependent " = response
+  ) %>% 
+  flextable::flextable() %>% 
+  flextable::merge_v(j = 1) %>%
+  # add_footer_lines("A footer") %>%  
+  set_caption("Univariate ANOVA Post-Hoc") %>% 
+  footnote( i = 1, j = c(2,4),
+            value = as_paragraph(
+              c("Reference level: year2013",
+                "adjusted for multiple comparisons using the Holms method")
+            ),
+            ref_symbols = c("a", "b"),
+            part = "header",inline = F) 
+
+```
+
+
