@@ -1,0 +1,362 @@
+---
+title: "Anthocyanes"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+source("000-helper_functions.R")
+
+set_greek_locale()
+gtsummary::set_gtsummary_theme(theme_gtsummary)
+
+flextable::set_flextable_defaults(
+  table.layout = "autofit",
+  na_str = ""
+)
+```
+
+```{r libraries, echo=FALSE, message=FALSE, warning=FALSE}
+library(haven)
+library(skimr)
+library(gt)
+library(janitor)
+library(gtsummary)
+library(labelled)
+library(corrr)
+library(flextable)
+library(tidyverse)
+
+```
+
+
+```{r read_data}
+
+dta <- readRDS("Data/anthocyans-clean.rds")
+
+labels <- var_label(dta)
+
+vars_indep <- c("humidity", "rain", "altitude", "temp_max", "temp_min", "temp_avg")
+
+vars_dep <- c("cyanidol3G", "delphinidol3G", "peonidol3G", "petunidol3G", "malvidol3G")
+
+vars_weather <- c("Humidity" = "humidity", "Rain" = "rain", "Temperature" = "temp_avg")
+
+```
+
+
+## Περιγραφικά
+
+### Number of Samples
+
+```{r}
+
+temp <- 
+  dta %>% 
+  select(region, variety, year) %>%
+  split(.$region) %>% 
+  map(~ select(., -region)) %>% 
+  imap(~ tbl_summary(., by = year) %>% 
+        modify_header(label = "",  all_stat_cols() ~ "**{level}**") %>% 
+        add_overall(last = TRUE, col_label = "**Συνολικά**")
+      ) 
+
+
+temp %>% 
+  tbl_stack(group_header = names(.)) %>% 
+  modify_header(label = "", groupname_col ~ "**Περιοχή**") %>% 
+  modify_spanning_header(all_stat_cols()~ "**Έτος**") %>% 
+  as_flex_table()  %>% 
+  set_caption("Αριθμός δειγμάτων ανά έτος, περιοχή και ποικιλία")
+
+
+# show_header_names(my_tbl)
+
+
+```
+
+
+```{r descriptives}
+
+the_table <- 
+  dta %>% 
+  count(year, variety, district) %>% 
+  spread(district, n) %>% 
+  rowwise() %>% 
+  mutate(
+    Total = sum(c(Limassol,Paphos), na.rm = T)
+  ) %>% 
+  ungroup() %>% 
+  gt(
+    rowname_col = "variety",
+    groupname_col = "year"
+  ) %>% 
+  fmt_missing(columns = everything()) %>%
+  summary_rows(
+    groups = TRUE,
+    columns = everything(),
+    fns = list(
+      #average = "mean",
+      Total = ~sum(., na.rm = T)
+      #SD = "sd"
+    ),
+    decimals = 0
+  ) %>% 
+  grand_summary_rows(
+    columns = c(Limassol, Paphos, Total),
+    fns = list(
+      #average = "mean",
+      Overall = ~sum(., na.rm = T)
+      #SD = "sd"
+    ),
+    decimals = 0
+  ) 
+
+
+# 
+# dta %>% 
+#   tabyl(district, variety, year) %>% 
+#   adorn_totals(c("col", "row")) %>% 
+#   adorn_percentages() %>% 
+#   adorn_pct_formatting() %>% 
+#   adorn_ns() %>% 
+#   {.} %>% 
+#   bind_rows(.id= "Year") %>% 
+#   gt(
+#     groupname_col = "Year"
+#   ) %>% 
+#   tab_footnote(#
+#     footnote = "% (N)", 
+#     locations = cells_column_labels()
+#   ) 
+
+
+the_table
+
+
+```
+
+
+### Μέσο επίπεδο ανθοκυάνων
+
+```{r}
+
+dta %>% 
+  select(variety, all_of(vars_dep)) %>% 
+  tbl_summary(
+    by = variety
+  ) %>% 
+  add_p() %>% 
+  modify_header(statistic = "**F**", label = "") %>% 
+  as_flex_table() %>% 
+  set_caption("Μέσο επίπεδο ανθοκυάνων ανά Ποικιλία")
+
+```
+
+
+```{r}
+#| fig.cap = "Ανθοκυανίνες"
+dta <- dta %>% mutate(alt2 = if_else(altitude < 800, "low", "high") ) 
+
+set.seed(123)
+
+plot_sina(dta, all_of(vars_dep), .by = variety, .split_by = NULL )+
+  labs(x = "", y = "")
+```
+
+
+### Συγκρίσεις κατά Περιοχή
+
+```{r}
+
+temp <- dta %>% 
+  select(all_of(vars_dep), region, variety) %>% 
+  split(.$variety) %>% 
+  map(~ select(., -variety)) %>% 
+  map(~ tbl_summary(., by = region) %>% modify_header(label = "",  all_stat_cols() ~ "**{level}**")) 
+
+temp %>% 
+  tbl_stack(group_header = names(.)) %>% 
+  modify_header(label = "", groupname_col ~ "**Ποικιλία**") %>% 
+  modify_spanning_header(all_stat_cols()~ "**Περιοχή**") %>% 
+  as_flex_table() 
+
+
+
+```
+
+### Συγκρίσεις κατά Πόλη
+
+```{r}
+
+temp <- dta %>% 
+  select(all_of(vars_dep), district, variety) %>% 
+  split(.$variety) %>% 
+  map(~ select(., -variety)) %>% 
+  map(~ tbl_summary(., by = district) %>% modify_header(label = "",  all_stat_cols() ~ "**{level}**")) 
+
+temp %>% 
+  tbl_stack(group_header = names(.)) %>% 
+  modify_header(label = "", groupname_col ~ "**Ποικιλία**") %>% 
+  modify_spanning_header(all_stat_cols()~ "**Πόλη**") %>% 
+  as_flex_table() 
+
+```
+
+
+### Συγκρίσεις κατά Έτος
+
+```{r}
+
+temp <- dta %>% 
+  select(all_of(vars_dep), year, variety) %>% 
+  split(.$variety) %>% 
+  map(~ select(., -variety)) %>% 
+  map(~ tbl_summary(., by = year) %>% modify_header(label = "",  all_stat_cols() ~ "**{level}**")) 
+
+temp %>% 
+  tbl_stack(group_header = names(.)) %>% 
+  modify_header(label = "", groupname_col ~ "**Ποικιλία**") %>% 
+  modify_spanning_header(all_stat_cols()~ "**Year**") %>% 
+  as_flex_table() 
+
+
+```
+
+
+
+```{r eval=FALSE, include=FALSE}
+### Correlation between weather data
+
+psych::pairs.panels(dta %>% select(all_of(vars_weather)),
+                    smooth = TRUE,      # If TRUE, draws loess smooths
+                    scale = FALSE,      # If TRUE, scales the correlation text font
+                    density = TRUE,     # If TRUE, adds density plots and histograms
+                    ellipses = FALSE,    # If TRUE, draws ellipses
+                    method = "pearson", # Correlation method (also "spearman" or "kendall")
+                    pch = 21,           # pch symbol
+                    lm = FALSE,         # If TRUE, plots linear fit rather than the LOESS (smoothed) fit
+                    cor = TRUE,         # If TRUE, reports correlations
+                    jiggle = TRUE,     # If TRUE, data points are jittered
+                    factor = 2,         # Jittering factor
+                    hist.col = "firebrick3",       # Histograms color
+                    stars = TRUE,       # If TRUE, adds significance level with stars
+                    ci = TRUE)  
+```
+
+
+```{r eval=FALSE, include=FALSE}
+
+# Interactions ------------------------------------------------------------
+
+
+library(interactions)
+
+vars_weather
+rhs <- paste0("variety*", vars_weather)
+vars_dep
+
+reformulate(vars_weather, NULL)
+
+
+all_models <- 
+  cross_df(list(response = vars_dep, rhs = rhs)) %>% 
+  mutate(modx = "variety", predictor = str_remove(rhs, "variety\\*")) %>% 
+  mutate(
+    form = map2(.x = response, .y = rhs, ~reformulate(.y, .x ))
+  ) %>% 
+  mutate(
+    lm_model = map(form, ~lm(., data = dta))
+  )
+
+plot_list <- 
+  map2(
+    .x = all_models$lm_model,
+    .y = all_models$predictor,
+    
+    .f = function(x,y){
+      
+      interact_plot(
+        model = x,
+        pred = !!y,
+        modx = "variety",
+        plot.points = TRUE,
+        x.label = labels[[y]],
+        legend.main = labels[["variety"]]
+        
+      )
+    }
+    
+  )
+
+plot_names <- map2(.x = all_models$response, 
+                   .y = all_models$predictor,
+                   .f = ~paste0(.y, "-" ,.x)
+)
+
+names(plot_list) <- plot_names
+
+
+iwalk(plot_list, ~ggsave(filename = paste0("Plots/", .y, ".png"),
+                         plot = .x
+))
+
+
+interact_plot(all_models$lm_model[[1]], modx = variety, pred = humidity, data = dta1)
+
+# interaction variety, year, region ----
+
+
+rhs <- paste0("variety*", c("year", "region"))
+
+year_mods <-  
+  cross_df(list(response = vars_dep, rhs = rhs)) %>% 
+  mutate(modx = "variety", predictor = str_remove(rhs, "variety\\*")) %>% 
+  mutate(
+    form = map2(.x = response, .y = rhs, ~reformulate(.y, .x ))
+  ) %>% 
+  mutate(
+    lm_model = map(form, ~lm(., data = dta))
+  )
+
+plot_list <- 
+  map2(
+    .x = year_mods$lm_model,
+    .y = year_mods$predictor,
+    
+    .f = function(x,y){
+      
+      cat_plot(
+        model = x,
+        pred = !!y,
+        modx = "variety",
+        geom = "line",
+        # point.shape = TRUE,
+        # interval = TRUE,
+        plot.points = TRUE,
+        x.label = labels[[y]],
+        #y.label = get_label("variety"),
+        legend.main = labels[["variety"]]
+        
+      )
+    }
+    
+  )
+
+plot_names <- map2(.x = year_mods$response, 
+                   .y = year_mods$predictor,
+                   .f = ~paste0(.y, "-" ,.x)
+)
+
+names(plot_list) <- plot_names
+
+
+iwalk(plot_list, ~ggsave(filename = paste0("Plots/", .y, ".png"),
+                         plot = .x
+))
+
+
+```
+
