@@ -7,6 +7,13 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+
+flextable::set_flextable_defaults(
+  font.size = 8,
+  theme_fun = "theme_vanilla",
+  na_str = ""
+)
+
 ```
 
 ```{r Setup, include=FALSE}
@@ -41,9 +48,7 @@ set_flextable_defaults(
   na_str = "-"
 )
 
-
 ```
-
 
 Σκοπός αυτής της ανάλυσης είναι να μελετήσουμε τις σχέσεις μεταξύ των ανεξάρτητων μεταβλητών για την MANOVA ανάλυση.    
 
@@ -63,7 +68,8 @@ set_flextable_defaults(
 
 ```{r}
 
-dta %>% tbl_cross(variety, year) %>% 
+dta %>% 
+  tbl_cross(variety, year) %>% 
   add_p() %>% 
   modify_header(label = " ") %>% 
   as_flex_table() %>% 
@@ -75,7 +81,8 @@ dta %>% tbl_cross(variety, year) %>%
 Δεν πάρθηκαν ποικιλίες από όλες τις περιοχές. Π.χ. Μαραθεύτικο δεν πήραμε από Βάσα και Μαλλιά.
 
 ```{r}
-dta %>% tbl_cross(variety, region) %>% 
+dta %>% 
+  tbl_cross(variety, region) %>% 
   #add_p() %>% 
   modify_header(label = " ") %>% 
   as_flex_table() %>% 
@@ -89,53 +96,107 @@ dta %>% tbl_cross(variety, region) %>%
 Σε κάθε χρονιά πήραμε από όλες τις περιοχές. Δεν υπάρχει συσχετιση χρονιάς στην περιοχή συλλογής (P=0.99)
 
 ```{r}
-dta %>% tbl_cross(year, region) %>% 
+dta_grp <- dta %>%  group_by(variety) 
+
+group_keys(dta_grp) %>% pull()
+
+dta_grp %>% 
+  group_split() %>% 
+  map(
+    ~ tbl_cross(., year, region) %>% 
   add_p() %>% 
-  modify_header(label = " ") %>% 
-  as_flex_table() %>% 
-  set_caption("Year by Region")
+  modify_header(label = " ")
+    
+  ) %>% 
+  tbl_stack(group_header = group_keys(dta_grp) %>% pull()) %>% 
+  as_flex_table()
+  
+# dta %>%
+#   tbl_cross(year, region) %>% 
+#   add_p() %>% 
+#   modify_header(label = " ") %>% 
+#   as_flex_table() %>% 
+#   set_caption("Year by Region")
+
+
 
 ```
 
+### `Έτος` ανά `Υψόμετρο`    
+
+
+
+```{r}
+dta_grp <- dta %>%  group_by(variety) 
+
+group_keys(dta_grp) %>% pull()
+
+dta_grp %>% 
+  mutate(altitude = factor(altitude)) %>% 
+  group_split() %>% 
+  map(
+    ~ tbl_cross(., year, altitude) %>% 
+  add_p() %>% 
+  modify_header(label = " ")
+    
+  ) %>% 
+  tbl_stack(group_header = group_keys(dta_grp) %>% pull()) %>% 
+  as_flex_table() %>% 
+  set_caption("Altitude by Year")
+  
+# dta %>%
+#   tbl_cross(year, altitude) %>%
+#   add_p() %>%
+#   modify_header(label = " ") %>%
+#   as_flex_table() %>%
+#   set_caption("Year by Region")
+
+```
 
 ### Υψόμετρο και περιοχή
 
 Εδώ έχουμε το υψόμετρο της κάθε περιοχής.   
-Βλέπουμε ότι έχουμε 2 υψόμετρα στα Μαλλιά (647, 393)
+Βλέπουμε ότι έχουμε 2 υψόμετρα στη Λαόνα για το Μαυρο (793, 832)
 
-Γενικά όμως ισχύει ότι το υψόμετρο είναι συνιφασμένο με την περιοχή. Οπότε στο μοντέλο είτε υψόμετρο θα βάλω είτε την περιοχή. Όχι και τα δύο    
+Γενικά όμως ισχύει ότι το υψόμετρο είναι συνιφασμένο με την περιοχή. Οπότε στο μοντέλο είτε υψόμετρο θα βάλω είτε την περιοχή. Όχι και τα δύο!  
 
 
 ```{r}
 
 dta %>% 
-  count(region, altitude, name = "samples") %>% 
-  arrange(-altitude) %>% 
+  count(variety, region, altitude, name = "samples") %>% 
+  #arrange(region, -altitude) %>% 
   flextable() %>% 
-  set_caption("Region and altitude")
+  set_caption("Περιοχή και Υψόμετρο") %>% 
+  merge_v(j = 1)
 
 ```
 
 
 
-### Σχέση `Περιοχής` με μεταβλητές καιρού    
+### Σχέση `Περιοχής`, `Υψόμετρο`, με μεταβλητές καιρού    
 
 Οι μεταβλητές του καιρού (Θερμοκρασία, Βροχόπτωση, Υγρασία) διαφοροποιούνται αναλόγως της περιοχής. Yυπάρχει συσχέτιση 
 
 
 ```{r}
+
+tar_var <- "altitude" 
+
 dta %>% 
-  filter(variety == "Mavro") %>% 
-  filter(region != "MALLIA") %>% 
-  select(altitude, all_of(vars_weather)) %>% 
+  # filter(variety == "Maratheftiko") %>% 
+  #filter(region != "MALLIA") %>% 
+  #mutate(region = droplevels(region)) %>%
+  select(all_of(vars_weather), weather, !!tar_var) %>% 
+  #filter(altitude>800) %>% 
   tbl_summary(
-    by = altitude,
+    by = !!tar_var,
     type = list(everything() ~ "continuous")
   ) %>% 
   add_p() %>% 
+  modify_header(statistic ~ "**F**", label = "") %>%
   as_flex_table() %>% 
   set_caption("Επίδραση Περιοχής στο καιρό")
-
 
 ```
 
@@ -149,42 +210,140 @@ dta %>%
 Θα πρέπει το έτος και οι μεταβλητές καιρού να μπουν σε ξεχωριστά μοντέλα.
 
 ```{r}
+
+var_variety <- c("OFTHALMO", "Cabernet Sauvignon", "Maratheftiko", "Mavro" )
+
+filter_var <- var_variety[4]
+
 dta %>% 
-  select(year, all_of(vars_weather)) %>% 
+  filter(variety == filter_var) %>% 
+  select(year, all_of(vars_weather), weather) %>% 
   tbl_summary(
     by = year,
     type = list(everything() ~ "continuous")
   ) %>% 
-  add_p() %>% 
+  add_p() %>%
+  modify_header(statistic ~ "**F**", label = "") %>%
   as_flex_table() %>% 
-  set_caption("Επίδραση Έτους στο καιρό")
+  set_caption(str_glue("Επίδραση Έτους στο καιρό: Variety: ", filter_var)) %>% 
+  #add_footer_lines(values = c("*Weather Conditions Factor Score")) %>% 
+  {.}
+
+dta_grp <- dta %>%  group_by(region) 
+
+dta_grp %>% 
+  select(region, year, all_of(unname(vars_weather)), weather) %>% 
+  group_split() %>% 
+  map(
+    ~  select(., -region) %>% 
+      tbl_summary(.,
+    by = year,
+    type = list(everything() ~ "continuous")
+  ) %>% 
+  add_p() %>% 
+  modify_header(label= "")
+    
+  ) %>% 
+  tbl_stack(group_header = group_keys(dta_grp) %>% pull()) %>% 
+  as_flex_table()
+
 
 ```
 
 ### Συσχέτιση μεταβλητών καιρού
-    
-    
 
+Υπάρχει μεγάλη συσχέτιση μεταξύ Υγρασίας, Βρόπτωσης και Μέσης Θερμοκρασίας 
 ```{r}
 
 dta %>% 
-  select(vars_weather) %>% 
+  select(all_of(vars_weather), variety) %>%
+  split(.$variety) %>% 
+  map_df( ~select(., -variety) %>% 
+            correlate() %>%
+            shave() %>% 
+            mutate(across(where(is.numeric), round, 2)) %>% 
+            filter(term != "Humidity") %>% 
+            rename(" " = term) %>% 
+            select(-Temperature)
+          , .id = "Variety"
+  ) %>% 
+  flextable() %>% 
+  merge_v(j = "Variety") %>% 
+  set_caption("Correlation between weather variables. By variety")
+
+
+dta %>% 
+  select(all_of(vars_weather), weather) %>%
   correlate() %>% 
-  shave()
+  #have() %>% 
+  focus(weather) %>% 
+  mutate(weather = round(weather, 2)) %>% 
+  rename(" " = term, r = weather) %>% 
+  flextable() %>% 
+  set_caption("Correlation of weather factor score and actual weather characteristics")
 
 
-
-res_fa <- psych::fa(
-  dta %>% select(vars_weather) , 1
-)
-
-
-res_fa %>% names()
-
-fa_scores <- as.numeric(res_fa$scores)
-
+dta %>% 
+  select(all_of(vars_weather), weather) %>% 
+  lpmisc::lp_scatter_by_target(target = weather, names(vars_weather)) +
+  labs(x = "Factor Analysis score")+
+  theme_bw() 
 
 
 ```
 
+## Συσχέτιση επιπέδου Ανθοκυανίνων με καιρικές συνθήκες
+
+
+
+   
+```{r}
+tbls <- dta %>% 
+  select(weather, vars_dep, variety) %>%
+  split(.$variety) %>% 
+  imap(
+    
+    function(x, y) {
+      x %>% 
+        select(-variety) %>% 
+        correlate() %>% 
+        shave() %>%
+        focus(weather) %>% 
+        mutate(term = recode(term, !!!labels)) %>% 
+        mutate(across(where(is.numeric), round, 2)) %>% 
+        rename(r = weather, " " = term) %>% 
+        flextable() %>% 
+        #flextable::add_header_lines(values = paste0("Variety: ", y)) %>% 
+        set_caption(glue::glue("Correlation with weather conditions: \n\n Variety {y}"))
+    }
+  )
+
+"- ddd"
+tbls[[1]]
+"- ddd"
+tbls[[2]]
+"- ddd"
+tbls[[3]]
+
+```
+
+## Scatterplot 
+
+
+
+```{r}
+lpmisc::lp_scatter_by_target(dta %>% filter(variety == "Maratheftiko"), target = rain, all_of(vars_dep))+
+  labs(x = "Rain", y = "")
+
+lpmisc::lp_scatter_by_target(
+  dta%>% filter(variety == "Maratheftiko"), 
+  target = humidity, 
+  all_of(vars_dep))+
+  labs(x = "Humidity", y = "")
+
+lpmisc::lp_scatter_by_target(dta, target = temp_avg, all_of(vars_dep))+
+  labs(x = "Temperature(average)", y = "")
+
+
+```
 

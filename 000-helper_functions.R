@@ -163,3 +163,27 @@ descriptives_fun <- function(dta, dim){
 }
 
 
+plot_sina <- function(data, ..., .by, .split_by = NULL){
+  
+  dta_long <- 
+    data %>% 
+    select(..., {{.by}}, {{.split_by}}) %>% 
+    pivot_longer(
+      names_to = "key",
+      values_to = "value",
+      cols = -c({{.by}}, {{.split_by}})
+    ) %>% 
+    mutate(key = fct_inorder(key)) 
+  
+  dta_long %>% 
+    ggplot(aes(x = {{.by}}, y = value, fill = {{.split_by}}))+
+    #geom_boxplot()+
+    geom_violin()+
+    ggforce::geom_sina(alpha=0.5)+
+    coord_flip()+
+    scale_x_discrete(labels = scales::wrap_format(10))+ #function(x) str_wrap(x, width = 10))+
+    facet_wrap(~key, scales = "free_x", labeller = as_labeller(unlist(labels)))+
+    theme_bw(base_size = 14)+
+    theme(legend.position = "top") 
+}
+
