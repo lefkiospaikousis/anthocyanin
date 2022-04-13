@@ -59,9 +59,9 @@ temp <-
   split(.$region) %>% 
   map(~ select(., -region)) %>% 
   imap(~ tbl_summary(., by = year) %>% 
-        modify_header(label = "",  all_stat_cols() ~ "**{level}**") %>% 
-        add_overall(last = TRUE, col_label = "**Συνολικά**")
-      ) 
+         modify_header(label = "",  all_stat_cols() ~ "**{level}**") %>% 
+         add_overall(last = TRUE, col_label = "**Συνολικά**")
+  ) 
 
 
 temp %>% 
@@ -156,7 +156,60 @@ dta %>%
 ```
 
 
+#### Post Hoc Tests
+
+Πραγματοποιήθηκαν πολλαπλές συγκρίσεις για τις διαφορές ανάμεσα στις ποικιλίες. Η στατιστική σημαντικότητα της διαφοράς μεταξύ των ζευγαριών των ποικιλιών, έχει προσαρμοστεί με τη μέθοδο
+Homls για τη μείωση της πιθανότητας του λάθους τύπου Ι. 
+
+- Κυανιδόλη
+Υπάρχει στατιστικά σημαντική διαφορά στο επίπεδο Κυανιδόλης σε όλες τις ποικιλίες
+
+- Δελφινόλη
+Υπάρχει στατιστικά σημαντική διαφορά στο επίπεδο Δελφινόλης σε όλες τις ποικιλίες
+
+- Πεονιδόλη
+Υπάρχει στατιστικά σημαντική διαφορά στο επίπεδο Πεονιδόλης σε όλες τις ποικιλίες
+
+- Πετουνιδόλη
+Το επίπεδο Πετουνιδόλης στο Οφαλθμό δεν διαφέρει από το Cabernet Sauvignon. Σε όλα τα υπόλοιπα
+ζευγάρια ποικιλιών υπάρχει στατιστικά σημαντική διαφορά στο επίπεδο Δελφινόλης
+
+- Μαλβιδόλη
+Υπάρχει στατιστικά σημαντική διαφορά στο επίπεδο Μαλβιδόλης σε όλες τις ποικιλίες
+
 ```{r}
+
+tibble(dep = vars_dep) %>% 
+  mutate(
+    model = map(dep, ~pairwise.t.test(dta[[.x]], dta[["variety"]], method = "dddd")),
+    res = map(model, broom::tidy)
+  ) %>% 
+  select(-model) %>% 
+  tidyr::unnest_legacy(res) %>% 
+  mutate(p.value = ifelse(p.value < 0.001, "<0.001", round(p.value, 3))) %>%  
+  # fix names
+  mutate(dep = recode(dep , !!!labels)) %>% 
+  rename(Anthocyanin = dep, Variety1 = group1, Variety2 = group2) %>% 
+  flextable() %>% 
+  footnote(i = 1, j = 4, value = as_paragraph("Adjusted with Holms correction"),
+            ref_symbols = c("a"),
+            part = "header"
+           ) %>% 
+  merge_v(1) %>% 
+  set_caption("Πολλαπλές συγκρίσεις (Post Hoc)") %>% 
+  hline( 6) %>% 
+  hline( 12) %>% 
+  hline( 18) %>% 
+  hline( 24) 
+
+
+```
+
+
+
+
+
+```{r boxplot, fig.width=10, fig.height=6}
 #| fig.cap = "Ανθοκυανίνες"
 dta <- dta %>% mutate(alt2 = if_else(altitude < 800, "low", "high") ) 
 
@@ -359,4 +412,5 @@ iwalk(plot_list, ~ggsave(filename = paste0("Plots/", .y, ".png"),
 
 
 ```
+
 

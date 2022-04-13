@@ -1,5 +1,17 @@
 
 
+
+
+# render Descritives
+
+rmarkdown::render(
+  input = "02-anthocyanes.Rmd",
+  output_file = paste0("Descriptives2.docx"),
+  #params = list(variety = variety),
+  envir = new.env()
+)
+
+
 render_variety <- function(variety){
   
   rmarkdown::render(
